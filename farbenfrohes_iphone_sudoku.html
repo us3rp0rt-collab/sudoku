@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <title>Color Sudoku</title>
+  <style>
+    :root {
+      --bg1: #ff7eb3;
+      --bg2: #65d6ce;
+      --bg3: #ffd166;
+      --ink: #182033;
+      --muted: #667085;
+      --card: rgba(255,255,255,.78);
+      --card-solid: #ffffff;
+      --line: rgba(24,32,51,.13);
+      --thick: rgba(24,32,51,.55);
+      --fixed: #1d3557;
+      --accent: #7c3aed;
+      --good: #16a34a;
+      --bad: #dc2626;
+      --shadow: 0 20px 55px rgba(31, 41, 55, .22);
+      --radius: 28px;
+      --cell: min(10.55vw, 43px);
+      font-family: ui-rounded, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      min-height: 100%;
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 12% 8%, rgba(255,255,255,.75), transparent 26%),
+        radial-gradient(circle at 88% 12%, rgba(255,255,255,.55), transparent 24%),
+        linear-gradient(135deg, var(--bg1), var(--bg2) 52%, var(--bg3));
+      overflow-x: hidden;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      padding: max(12px, env(safe-area-inset-top)) 12px max(16px, env(safe-area-inset-bottom));
+    }
+
+    .app {
+      width: min(100%, 460px);
+      min-height: calc(100vh - 20px);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    header {
+      padding: 12px 8px 0;
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(26px, 8vw, 40px);
+      line-height: .95;
+      letter-spacing: -.05em;
+      color: #fff;
+      text-shadow: 0 4px 18px rgba(0,0,0,.22);
+    }
+
+    .subtitle {
+      margin: 8px auto 0;
+      max-width: 340px;
+      color: rgba(255,255,255,.95);
+      font-weight: 700;
+      font-size: 13px;
+      text-shadow: 0 2px 9px rgba(0,0,0,.16);
+    }
+
+    .panel {
+      background: var(--card);
+      backdrop-filter: blur(18px) saturate(1.25);
+      -webkit-backdrop-filter: blur(18px) saturate(1.25);
+      border: 1px solid rgba(255,255,255,.65);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .difficulty {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 5px;
+      position: sticky;
+      top: max(8px, env(safe-area-inset-top));
+      z-index: 20;
+    }
+
+    .difficulty button {
+      height: 38px;
+      border: 0;
+      border-radius: 14px;
+      color: #fff;
+      font-weight: 900;
+      font-size: 15px;
+      box-shadow: inset 0 -2px 0 rgba(0,0,0,.12), 0 5px 12px rgba(0,0,0,.12);
+      cursor: pointer;
+      touch-action: manipulation;
+      transform: translateZ(0);
+    }
+
+    .difficulty button:nth-child(-n+3) { background: linear-gradient(180deg, #34d399, #059669); }
+    .difficulty button:nth-child(n+4):nth-child(-n+6) { background: linear-gradient(180deg, #60a5fa, #2563eb); }
+    .difficulty button:nth-child(n+7):nth-child(-n+9) { background: linear-gradient(180deg, #fb923c, #ea580c); }
+    .difficulty button:nth-child(10) { background: linear-gradient(180deg, #f43f5e, #9f1239); }
+    .difficulty button.active { outline: 3px solid rgba(255,255,255,.95); transform: translateY(-1px); }
+    .difficulty button:active { transform: scale(.94); }
+
+    .status {
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 32px;
+      padding: 7px 11px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.58);
+      border: 1px solid rgba(255,255,255,.65);
+      white-space: nowrap;
+    }
+
+    .message {
+      flex: 1;
+      text-align: right;
+      color: #334155;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .board-wrap {
+      padding: 10px;
+    }
+
+    .board {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(9, 1fr);
+      background: rgba(255,255,255,.86);
+      border: 3px solid var(--thick);
+      border-radius: 22px;
+      overflow: hidden;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.7);
+    }
+
+    .cell {
+      aspect-ratio: 1;
+      width: 100%;
+      min-width: 0;
+      display: grid;
+      place-items: center;
+      position: relative;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,.72);
+      user-select: none;
+      overflow: hidden;
+    }
+
+    .cell:nth-child(3n) { border-right-color: var(--thick); border-right-width: 2px; }
+    .cell:nth-child(n+19):nth-child(-n+27),
+    .cell:nth-child(n+46):nth-child(-n+54) { border-bottom-color: var(--thick); border-bottom-width: 2px; }
+    .cell:nth-child(9n) { border-right: 0; }
+    .cell:nth-child(n+73) { border-bottom: 0; }
+
+    .cell.fixed {
+      background: linear-gradient(145deg, rgba(219,234,254,.96), rgba(240,249,255,.9));
+      color: var(--fixed);
+      font-weight: 1000;
+      font-size: clamp(18px, 5.3vw, 26px);
+    }
+
+    .cell.same-number:not(.empty) { background: rgba(253, 224, 71, .32); }
+    .cell.selected { background: rgba(167, 139, 250, .31); box-shadow: inset 0 0 0 3px rgba(124,58,237,.5); }
+    .cell.conflict { background: rgba(248,113,113,.25); color: var(--bad); }
+    .cell.solved-flash { animation: flash .7s ease both; }
+
+    @keyframes flash {
+      0% { background: rgba(34,197,94,.65); transform: scale(1); }
+      45% { transform: scale(1.05); }
+      100% { background: rgba(255,255,255,.72); transform: scale(1); }
+    }
+
+    .value {
+      font-weight: 900;
+      font-size: clamp(17px, 5.1vw, 25px);
+      line-height: 1;
+    }
+
+    .cell.empty .value { color: transparent; }
+
+    .cell select {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      appearance: none;
+      -webkit-appearance: none;
+      font-size: 22px;
+      cursor: pointer;
+    }
+
+    .dial-hint {
+      position: absolute;
+      width: 8px;
+      height: 28px;
+      right: 4px;
+      top: 50%;
+      transform: translateY(-50%);
+      border-radius: 999px;
+      background: linear-gradient(180deg, rgba(124,58,237,.55), rgba(236,72,153,.55));
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.55);
+      pointer-events: none;
+    }
+
+    .cell.fixed .dial-hint,
+    .cell.fixed select { display: none; }
+
+    .controls {
+      padding: 12px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .controls button {
+      min-height: 48px;
+      border: 0;
+      border-radius: 18px;
+      background: rgba(255,255,255,.76);
+      color: var(--ink);
+      font-weight: 950;
+      font-size: 15px;
+      box-shadow: 0 8px 18px rgba(15,23,42,.13), inset 0 -2px 0 rgba(0,0,0,.08);
+      cursor: pointer;
+    }
+
+    .controls button.primary {
+      color: #fff;
+      background: linear-gradient(135deg, #8b5cf6, #ec4899);
+    }
+
+    .timer-card {
+      margin-top: auto;
+      padding: 14px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px 12px;
+      align-items: center;
+    }
+
+    .timer-label {
+      font-size: 12px;
+      font-weight: 900;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .timer {
+      font-variant-numeric: tabular-nums;
+      font-size: clamp(31px, 9vw, 48px);
+      font-weight: 1000;
+      letter-spacing: -.04em;
+      line-height: 1;
+    }
+
+    .finish-time {
+      grid-column: 1 / -1;
+      min-height: 24px;
+      color: var(--good);
+      font-weight: 900;
+    }
+
+    .tiny {
+      font-size: 12px;
+      color: rgba(24,32,51,.72);
+      text-align: center;
+      padding: 0 10px 3px;
+      font-weight: 650;
+    }
+
+    .win {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 22px;
+      z-index: 100;
+      background: rgba(15, 23, 42, .38);
+      backdrop-filter: blur(8px);
+    }
+
+    .win.show { display: flex; }
+
+    .win-box {
+      width: min(100%, 360px);
+      padding: 26px;
+      border-radius: 30px;
+      background: #fff;
+      text-align: center;
+      box-shadow: 0 30px 90px rgba(0,0,0,.32);
+      animation: pop .35s cubic-bezier(.2,1.35,.4,1) both;
+    }
+
+    @keyframes pop { from { transform: scale(.78); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+    .win-box h2 { margin: 0 0 8px; font-size: 32px; }
+    .win-box p { margin: 0 0 18px; color: var(--muted); font-weight: 750; }
+    .win-box button {
+      border: 0;
+      border-radius: 18px;
+      padding: 14px 20px;
+      color: #fff;
+      background: linear-gradient(135deg, #06b6d4, #8b5cf6, #ec4899);
+      font-size: 16px;
+      font-weight: 950;
+    }
+
+    @media (min-width: 430px) {
+      :root { --cell: 44px; }
+      .board-wrap { padding: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app" aria-label="Sudoku-Spiel">
+    <header>
+      <h1>Color Sudoku</h1>
+      <p class="subtitle">iPhone-optimiert · Eingabe je Feld über vertikalen Zahlen-Drehregler 0–9</p>
+    </header>
+
+    <nav class="difficulty panel" aria-label="Schwierigkeit wählen" id="difficulty"></nav>
+
+    <section class="status panel" aria-live="polite">
+      <span class="pill" id="difficultyLabel">Level 5 · Mittel</span>
+      <span class="message" id="message">Drücke Start und löse das Sudoku.</span>
+    </section>
+
+    <section class="board-wrap panel">
+      <div class="board" id="board" aria-label="Sudoku-Brett"></div>
+    </section>
+
+    <section class="controls panel">
+      <button class="primary" id="newGame">Neues Spiel</button>
+      <button id="checkGame">Prüfen</button>
+      <button id="startStop">Start</button>
+      <button id="clearMistakes">Fehler leeren</button>
+    </section>
+
+    <section class="timer-card panel">
+      <div>
+        <div class="timer-label">Stoppuhr</div>
+        <div class="timer" id="timer">00:00</div>
+      </div>
+      <span class="pill" id="filled">0 / 81</span>
+      <div class="finish-time" id="finishTime"></div>
+    </section>
+
+    <p class="tiny">Tipp: 0 löscht ein Feld. Vorgegebene Zahlen sind blau und gesperrt.</p>
+  </main>
+
+  <div class="win" id="win">
+    <div class="win-box">
+      <h2>🎉 Gelöst!</h2>
+      <p id="winText">Spielzeit: 00:00</p>
+      <button id="winNew">Noch eine Runde</button>
+    </div>
+  </div>
+
+  <script>
+    const boardEl = document.getElementById('board');
+    const difficultyEl = document.getElementById('difficulty');
+    const difficultyLabel = document.getElementById('difficultyLabel');
+    const messageEl = document.getElementById('message');
+    const timerEl = document.getElementById('timer');
+    const filledEl = document.getElementById('filled');
+    const finishEl = document.getElementById('finishTime');
+    const winEl = document.getElementById('win');
+    const winText = document.getElementById('winText');
+
+    let solution = [];
+    let puzzle = [];
+    let entries = [];
+    let fixed = [];
+    let selectedValue = 0;
+    let level = 5;
+    let timerId = null;
+    let startedAt = 0;
+    let elapsedBefore = 0;
+    let solved = false;
+    let hasStarted = false;
+
+    const levelNames = ['Leicht','Leicht','Leicht','Mittel','Mittel','Mittel','Schwer','Schwer','Schwer','Sehr schwer'];
+    const holesByLevel = [36, 39, 42, 46, 49, 52, 55, 58, 61, 64];
+
+    function range(n) { return [...Array(n).keys()]; }
+    function cloneGrid(g) { return g.map(row => row.slice()); }
+    function shuffle(arr) {
+      const a = arr.slice();
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a;
+    }
+
+    function pattern(r, c) { return (r * 3 + Math.floor(r / 3) + c) % 9; }
+
+    function generateSolution() {
+      const rows = [].concat(...shuffle([0,1,2]).map(g => shuffle([0,1,2]).map(r => g * 3 + r)));
+      const cols = [].concat(...shuffle([0,1,2]).map(g => shuffle([0,1,2]).map(c => g * 3 + c)));
+      const nums = shuffle([1,2,3,4,5,6,7,8,9]);
+      return rows.map(r => cols.map(c => nums[pattern(r, c)]));
+    }
+
+    function makePuzzle(sol, holes) {
+      const p = cloneGrid(sol);
+      const positions = shuffle(range(81));
+      for (let i = 0; i < holes; i++) {
+        const pos = positions[i];
+        p[Math.floor(pos / 9)][pos % 9] = 0;
+      }
+      return p;
+    }
+
+    function labelForLevel(lvl) {
+      return `Level ${lvl} · ${levelNames[lvl - 1]}`;
+    }
+
+    function buildDifficultyButtons() {
+      difficultyEl.innerHTML = '';
+      for (let i = 1; i <= 10; i++) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = i;
+        btn.ariaLabel = `Schwierigkeit ${i}: ${levelNames[i - 1]}`;
+        btn.addEventListener('click', () => {
+          level = i;
+          newGame();
+        });
+        difficultyEl.appendChild(btn);
+      }
+    }
+
+    function startTimer() {
+      if (solved || timerId) return;
+      hasStarted = true;
+      startedAt = Date.now();
+      timerId = setInterval(updateTimer, 250);
+      document.getElementById('startStop').textContent = 'Pause';
+      messageEl.textContent = 'Stoppuhr läuft. Viel Erfolg!';
+      updateTimer();
+    }
+
+    function pauseTimer() {
+      if (!timerId) return;
+      elapsedBefore += Date.now() - startedAt;
+      clearInterval(timerId);
+      timerId = null;
+      document.getElementById('startStop').textContent = 'Weiter';
+      updateTimer();
+    }
+
+    function resetTimer() {
+      clearInterval(timerId);
+      timerId = null;
+      startedAt = 0;
+      elapsedBefore = 0;
+      hasStarted = false;
+      timerEl.textContent = '00:00';
+      document.getElementById('startStop').textContent = 'Start';
+    }
+
+    function getElapsed() {
+      return elapsedBefore + (timerId ? Date.now() - startedAt : 0);
+    }
+
+    function formatTime(ms) {
+      const total = Math.floor(ms / 1000);
+      const m = String(Math.floor(total / 60)).padStart(2, '0');
+      const s = String(total % 60).padStart(2, '0');
+      const h = Math.floor(total / 3600);
+      if (h > 0) return `${String(h).padStart(2, '0')}:${String(Math.floor((total % 3600) / 60)).padStart(2, '0')}:${s}`;
+      return `${m}:${s}`;
+    }
+
+    function updateTimer() {
+      timerEl.textContent = formatTime(getElapsed());
+    }
+
+    function renderBoard() {
+      boardEl.innerHTML = '';
+      const flat = entries.flat();
+      const conflictSet = findConflicts();
+      const sameValue = selectedValue > 0;
+
+      for (let r = 0; r < 9; r++) {
+        for (let c = 0; c < 9; c++) {
+          const idx = r * 9 + c;
+          const val = entries[r][c];
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          if (fixed[r][c]) cell.classList.add('fixed');
+          if (val === 0) cell.classList.add('empty');
+          if (sameValue && val === selectedValue) cell.classList.add('same-number');
+          if (conflictSet.has(idx)) cell.classList.add('conflict');
+
+          const value = document.createElement('div');
+          value.className = 'value';
+          value.textContent = val || '0';
+          cell.appendChild(value);
+
+          if (!fixed[r][c]) {
+            const hint = document.createElement('div');
+            hint.className = 'dial-hint';
+            cell.appendChild(hint);
+
+            const select = document.createElement('select');
+            select.ariaLabel = `Feld Reihe ${r + 1}, Spalte ${c + 1}`;
+            for (let n = 0; n <= 9; n++) {
+              const opt = document.createElement('option');
+              opt.value = n;
+              opt.textContent = n === 0 ? '0 · leer' : String(n);
+              select.appendChild(opt);
+            }
+            select.value = val;
+            select.addEventListener('focus', () => markSelected(idx));
+            select.addEventListener('change', () => {
+              if (!hasStarted) startTimer();
+              entries[r][c] = Number(select.value);
+              selectedValue = entries[r][c];
+              renderBoard();
+              updateCounters();
+              checkSolved();
+            });
+            cell.appendChild(select);
+          } else {
+            cell.addEventListener('click', () => {
+              selectedValue = val;
+              renderBoard();
+            });
+          }
+
+          cell.addEventListener('click', () => markSelected(idx));
+          boardEl.appendChild(cell);
+        }
+      }
+      updateCounters();
+    }
+
+    function markSelected(idx) {
+      const r = Math.floor(idx / 9), c = idx % 9;
+      selectedValue = entries[r][c];
+      [...boardEl.children].forEach((el, i) => el.classList.toggle('selected', i === idx));
+      if (selectedValue) renderBoard();
+    }
+
+    function findConflicts() {
+      const conflicts = new Set();
+      function scan(cells) {
+        const seen = new Map();
+        for (const idx of cells) {
+          const r = Math.floor(idx / 9), c = idx % 9;
+          const val = entries[r][c];
+          if (!val) continue;
+          if (!seen.has(val)) seen.set(val, []);
+          seen.get(val).push(idx);
+        }
+        for (const list of seen.values()) if (list.length > 1) list.forEach(i => conflicts.add(i));
+      }
+      for (let r = 0; r < 9; r++) scan(range(9).map(c => r * 9 + c));
+      for (let c = 0; c < 9; c++) scan(range(9).map(r => r * 9 + c));
+      for (let br = 0; br < 3; br++) {
+        for (let bc = 0; bc < 3; bc++) {
+          const cells = [];
+          for (let r = br * 3; r < br * 3 + 3; r++) for (let c = bc * 3; c < bc * 3 + 3; c++) cells.push(r * 9 + c);
+          scan(cells);
+        }
+      }
+      return conflicts;
+    }
+
+    function updateCounters() {
+      const filled = entries.flat().filter(Boolean).length;
+      filledEl.textContent = `${filled} / 81`;
+    }
+
+    function checkGame() {
+      const conflicts = findConflicts();
+      const filled = entries.flat().filter(Boolean).length;
+      if (conflicts.size) {
+        messageEl.textContent = `${conflicts.size} Feld(er) haben Konflikte.`;
+        renderBoard();
+        return false;
+      }
+      if (filled < 81) {
+        messageEl.textContent = `Noch ${81 - filled} Feld(er) offen.`;
+        return false;
+      }
+      const correct = entries.every((row, r) => row.every((v, c) => v === solution[r][c]));
+      messageEl.textContent = correct ? 'Alles richtig!' : 'Keine Doppelung, aber noch nicht die Lösung.';
+      return correct;
+    }
+
+    function checkSolved() {
+      if (solved) return;
+      if (!entries.flat().every(Boolean)) return;
+      if (!entries.every((row, r) => row.every((v, c) => v === solution[r][c]))) {
+        checkGame();
+        return;
+      }
+      solved = true;
+      pauseTimer();
+      const finalTime = formatTime(getElapsed());
+      finishEl.textContent = `Endzeit festgehalten: ${finalTime}`;
+      messageEl.textContent = 'Perfekt gelöst!';
+      [...boardEl.children].forEach((cell, i) => setTimeout(() => cell.classList.add('solved-flash'), (i % 9) * 20 + Math.floor(i / 9) * 35));
+      winText.textContent = `Deine Spielzeit: ${finalTime}`;
+      setTimeout(() => winEl.classList.add('show'), 700);
+    }
+
+    function clearMistakes() {
+      let removed = 0;
+      for (let r = 0; r < 9; r++) {
+        for (let c = 0; c < 9; c++) {
+          if (!fixed[r][c] && entries[r][c] && entries[r][c] !== solution[r][c]) {
+            entries[r][c] = 0;
+            removed++;
+          }
+        }
+      }
+      selectedValue = 0;
+      messageEl.textContent = removed ? `${removed} falsche Eingabe(n) gelöscht.` : 'Keine falschen Eingaben gefunden.';
+      renderBoard();
+    }
+
+    function newGame() {
+      solution = generateSolution();
+      puzzle = makePuzzle(solution, holesByLevel[level - 1]);
+      entries = cloneGrid(puzzle);
+      fixed = puzzle.map(row => row.map(Boolean));
+      selectedValue = 0;
+      solved = false;
+      resetTimer();
+      finishEl.textContent = '';
+      winEl.classList.remove('show');
+      difficultyLabel.textContent = labelForLevel(level);
+      messageEl.textContent = 'Drücke Start oder gib direkt eine Zahl ein.';
+      [...difficultyEl.children].forEach((btn, idx) => btn.classList.toggle('active', idx + 1 === level));
+      renderBoard();
+    }
+
+    document.getElementById('newGame').addEventListener('click', newGame);
+    document.getElementById('checkGame').addEventListener('click', checkGame);
+    document.getElementById('clearMistakes').addEventListener('click', clearMistakes);
+    document.getElementById('startStop').addEventListener('click', () => timerId ? pauseTimer() : startTimer());
+    document.getElementById('winNew').addEventListener('click', newGame);
+    winEl.addEventListener('click', e => { if (e.target === winEl) winEl.classList.remove('show'); });
+
+    buildDifficultyButtons();
+    newGame();
+  </script>
+</body>
+</html>
